@@ -1,4 +1,4 @@
-FROM nvidia/cuda:9.0-cudnn7-devel-ubuntu16.04
+FROM nvidia/cuda:9.0-cudnn7-devel-ubuntu16.04 as base
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends git wget unzip bzip2
@@ -45,9 +45,12 @@ RUN conda init bash
 # Potential TODO: Install extra packages for GUI stuff?
 
 # create a project directory inside user home
-COPY . /app
-WORKDIR /app
-ENV PROJECT_DIR /app
+# COPY . /app
+# WORKDIR /app
+USER root
+RUN git clone https://github.com/rcffc/PointGroup --recursive 
+WORKDIR /PointGroup
+ENV PROJECT_DIR /PointGroup
 
 # Install PointGroup
 RUN conda create -n pointgroup python=3.7
@@ -64,7 +67,6 @@ RUN conda install -c bioconda google-sparsehash
 RUN conda install libboost && \
 conda install -c daleydeng gcc-5 # need gcc-5.4 for sparseconv
 
-USER root
 RUN apt-get update && apt-get install -y libboost-dev libsparsehash-dev python2.7 nano
 
 RUN cd lib/spconv && \
@@ -76,6 +78,16 @@ RUN cd lib/pointgroup_ops && \
 python setup.py develop
 
 RUN pip install gdown
+WORKDIR /PointGroup
 RUN gdown https://drive.google.com/uc?id=1wGolvj73i-vNtvsHhg_KXonNH2eB_6-w
 
-#RUN nano /etc/ssh/sshd_config
+FROM base as debugger
+
+RUN conda activate pointgroup
+RUN conda install -c conda-forge -n pointgroup debugpy 
+
+ENTRYPOINT [ "/home/taro/miniconda3/envs/pointgroup/bin/python", "-m", "debugpy", "--listen", "0.0.0.0:5678", "--wait-for-client", "--log-to-stderr", "test.py", "--config", "config/pointgroup_default_scannet.yaml", "--pretrain", "pointgroup.pth"]
+
+FROM base as primary
+
+ENTRYPOINT [ "python", "-m" ]
